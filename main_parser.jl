@@ -172,7 +172,6 @@ end
 function parsing(hg, parsed_text, order)
     output = Dict()
     ones_hg = [[i for i in 1:nhv(hg) if hg[i, e] == 1] for e in 1:nhe(hg)]
-    print(ones_hg)
     for e in 1:nhe(hg)
         output[e] = Any[]
         if e != 1

@@ -20,40 +20,34 @@ spacy = pyimport("spacy")
 
 nlp = spacy.load("en_core_web_lg")
 
-doc = nlp("Berlin is the capital of Germany")
-
-hg, _ = beta(patterns, doc, alpha(doc, rf))
-
 @testset "Hypergraphs tests" begin
     doc = nlp("Berlin is the capital of Germany")
     hg, _ = beta(patterns, doc, alpha(doc, rf))
+    expected = Hypergraph{Float64}(6, 3); expected[4:6, 1] .= 1
+    expected[3:6, 2] .= 1; expected[1:6, 3] .=1
+    @test hg == expected
 
-
-    doc = nlp("Berlin is the capital of Germany")
+    doc = nlp("Mary likes astronomy and plays football")
     hg, _ = beta(patterns, doc, alpha(doc, rf))
+    expected = Hypergraph{Float64}(6, 3); expected[5:6, 1] .= 1
+    expected[1:3, 2] .= 1; expected[1:6, 3] .=1
+    @test hg == expected
 
-
-    doc = nlp("Berlin is the capital of Germany")
+    doc = nlp("Alice says dogs are nice")
     hg, _ = beta(patterns, doc, alpha(doc, rf))
+    expected = Hypergraph{Float64}(5, 3); expected[3:5, 1] .= 1
+    expected[1:2, 2] .= 1; expected[1:5, 3] .=1
+    @test hg == expected
 
-
-    doc = nlp("Berlin is the capital of Germany")
+    doc = nlp("Bob wants to play chess")
     hg, _ = beta(patterns, doc, alpha(doc, rf))
+    expected = Hypergraph{Float64}(5, 3); expected[3:4, 1] .= 1
+    expected[3:5, 2] .= 1; expected[1:5, 3] .=1
+    @test hg == expected
 
-
-    doc = nlp("Berlin is the capital of Germany")
+    doc = nlp("Alice says dogs are nice")
     hg, _ = beta(patterns, doc, alpha(doc, rf))
-
-
-    doc = nlp("Berlin is the capital of Germany")
-    hg, _ = beta(patterns, doc, alpha(doc, rf))
-
-
-    doc = nlp("Berlin is the capital of Germany")
-    hg, _ = beta(patterns, doc, alpha(doc, rf))
-
-
-    doc = nlp("Berlin is the capital of Germany")
-    hg, _ = beta(patterns, doc, alpha(doc, rf))
-
-
+    expected = Hypergraph{Float64}(5, 3); expected[3:5, 1] .= 1
+    expected[1:2, 2] .= 1; expected[1:5, 3] .=1
+    @test hg == expected
+end
