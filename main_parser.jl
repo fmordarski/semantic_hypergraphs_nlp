@@ -1,4 +1,4 @@
-using  SimpleHypergraphs
+using  SimpleHypergraphs, Statistics
 import LightGraphs
 
 
@@ -69,52 +69,99 @@ end
 function function_h(hg, doc)
     tokens = [token for token in doc]
     texts = [token.text for token in tokens]
-    score = 0
+    global score = 0
     global ones_hg = [[i for i in 1:nhv(hg) if hg[i, e] == 1] for e in 1:nhe(hg)]
     connected_vertices = [i for i in 1:nhv(hg) if 
                          length([e for e in 1:nhe(hg) if hg[i, e] == 1]) > 2]
-    if length(connected_vertices) < 1
-        score = 1
-        for v in 1:length(ones_hg)
-            tokens_new = tokens[ones_hg[v]]
-            depths = [length([ancestor.text for ancestor in token.ancestors]) 
-                                               for token in tokens_new]
-            min_depths = findall(isequal(minimum(depths)), depths)
-            min_depth_token = tokens_new[findfirst(isequal(minimum(depths)), depths)]
-            rest = [token for token in tokens_new if token != min_depth_token]
-            if length(min_depths) > 1
-                return 0
-            end
-            childs = []
-            for token in tokens_new
-                children_token = [child for child in token.children]
-                append!(childs, children_token)
-            end
-            if any(y->y ∉ childs, rest)
-                return 0
-            end
+    edge_check = nhe(hg)
+    edge_connected = [e for e in 1:nhe(hg)-1 if all(y->y in ones_hg[edge_check], ones_hg[e])]
+    if length(edge_connected) == 0
+        tokens_new = tokens[ones_hg[edge_check]]
+        depths = [length([ancestor.text for ancestor in token.ancestors]) 
+                                           for token in tokens_new]
+        min_depths = findall(isequal(minimum(depths)), depths)
+        min_depth_token = tokens_new[findfirst(isequal(minimum(depths)), depths)]
+        rest = [token for token in tokens_new if token != min_depth_token]
+        global score = length(rest) * 0.5
+        if length(min_depths) > 1
+            global score = 0
         end
-        return score
-    end
-    for e in 1:length(ones_hg)
+        childs = []
+        for token in tokens_new
+            children_token = [child for child in token.children]
+            append!(childs, children_token)
+        end
+        if any(y->y ∉ childs, rest)
+            global score = 0
+        end
+        if all(y->y in rest, childs)
+            global score += 0.5
+        end
+    else
         check = []
-        for rest_e in 1:length(ones_hg)
-            if rest_e == e
-                break
-            end
+        for rest_e in edge_connected
             head_indexes = [findfirst(isequal(token.head.text), texts) for token in tokens[ones_hg[rest_e]]]
             child_indexes = [findfirst(isequal(child), tokens) 
                             for token in tokens[ones_hg[rest_e]] for child in token.children]
-            if any(y->y in ones_hg[e], vcat(head_indexes, child_indexes))
-                append!([true], check)
-            else
-                append!([false], check)
+            rest = [v for v in ones_hg[edge_check] if v ∉ ones_hg[rest_e]]
+            if any(y->y in rest, vcat(head_indexes, child_indexes))
+                global score += 1
             end
+        #     else
+        #         append!([false], check)
+        #     end
+        # end
+        # if all(check)
+        #     score += 1
         end
-        if all(check)
-            score += 1
-        end
+    if all(y->y == 1, hg[:, edge_check])
+        global score += 1
     end
+    end
+    # if length(connected_vertices) < 1
+    #     print("tutaj")
+    #     score = 1
+    #     for v in 1:length(ones_hg)
+    #         tokens_new = tokens[ones_hg[v]]
+    #         depths = [length([ancestor.text for ancestor in token.ancestors]) 
+    #                                            for token in tokens_new]
+    #         min_depths = findall(isequal(minimum(depths)), depths)
+    #         min_depth_token = tokens_new[findfirst(isequal(minimum(depths)), depths)]
+    #         rest = [token for token in tokens_new if token != min_depth_token]
+    #         if length(min_depths) > 1
+    #             score = 0
+    #         end
+    #         childs = []
+    #         for token in tokens_new
+    #             children_token = [child for child in token.children]
+    #             append!(childs, children_token)
+    #         end
+    #         if any(y->y ∉ childs, rest)
+    #             score = 0
+    #         end
+    #     end
+    #     return score
+    # end
+    # for e in 1:length(ones_hg)
+    #     print("tutaj 2")
+    #     check = []
+    #     for rest_e in 1:length(ones_hg)
+    #         if rest_e == e
+    #             break
+    #         end
+    #         head_indexes = [findfirst(isequal(token.head.text), texts) for token in tokens[ones_hg[rest_e]]]
+    #         child_indexes = [findfirst(isequal(child), tokens) 
+    #                         for token in tokens[ones_hg[rest_e]] for child in token.children]
+    #         if any(y->y in ones_hg[e], vcat(head_indexes, child_indexes))
+    #             append!([true], check)
+    #         else
+    #             append!([false], check)
+    #         end
+    #     end
+    #     if all(check)
+    #         score += 1
+    #     end
+    # end
     return score
 end     
 
@@ -162,9 +209,9 @@ function get_depth(hg, depths, indexes)
         end
     end
     if length(valid_indexes) < 1
-        return(mean(depths[indexes[1]:indexes[2]]))
+        return maximum(depths[indexes[1]:indexes[2]])
     else
-        return mean(depths[valid_indexes])
+        return maximum(depths[valid_indexes])
     end
 end
         
@@ -222,7 +269,42 @@ function parsing(hg, parsed_text, order)
     return output
 end 
 
-function beta(patterns, doc, atoms)
+function find_paircc(atoms)
+    indexes = []
+    for i in 1:length(atoms)-1
+        if (atoms[i] == "C") & (atoms[i+1] == "C")
+            append!(indexes, [[i, i+1]])
+        end
+    end
+    return indexes
+end
+
+
+function initial_atoms(indexes, atoms_depths, atoms_tokens, hypergraph, order)
+    print(indexes)
+    global i = 0
+    for pair in indexes
+        print(pair)
+        hypergraph[pair[1]:pair[2], nhe(hypergraph)] .= 1
+        last_tokens = atoms_tokens[atoms_depths[1]]
+        atoms_depths[1][pair[1]-i:pair[2]-i] .= "B"
+        atoms_depths[2][pair[1]-i:pair[2]-i] .= maximum(atoms_depths[2][pair[1]-i:pair[2]-i])
+        deleteat!(atoms_depths[1], pair[1]-i)
+        deleteat!(atoms_depths[2], pair[1]-i)
+        new_tokens = [j ∉ pair.-i ? last_tokens[j] : last_tokens[pair.-i] for j in 1:length(last_tokens)]
+        deleteat!(new_tokens, pair[1]-i)
+        atoms_tokens[atoms_depths[1]] = new_tokens
+        append!(order, [1, 2])
+        add_hyperedge!(hypergraph)
+        global i += 1
+    end
+    return atoms_depths, hypergraph, order, atoms_tokens
+end
+
+
+
+
+function beta(patterns, doc, atoms, debug=false)
     global tokens = [token for token in doc]
     global depths = [length([ancestor.text for ancestor in token.ancestors]) 
                                            for token in tokens]
@@ -230,6 +312,11 @@ function beta(patterns, doc, atoms)
     global parsed_text = [(atom, token.text) for (token, atom) in zip(doc, atoms)]
     global hypergraph = Hypergraph{Float64}(length([token for token in doc]), 1)
     global order = []
+    global atoms_tokens = Dict([atom for atom in atoms] => tokens)
+    cc_indexes = find_paircc(atoms_depths[1])
+    if length(cc_indexes) > 0
+        atoms_depths, hypergraph, order, atoms_tokens = initial_atoms(cc_indexes, atoms_depths, atoms_tokens, hypergraph, order)
+    end
     while any(y->y != 1, hypergraph[:, nhe(hypergraph)])
         global depth_best = 0
         global h_best = 0
@@ -248,9 +335,6 @@ function beta(patterns, doc, atoms)
                         copy_hg = get_copy_hg(hypergraph)
                         copy_hg[orig_indexes[1]:orig_indexes[2], nhe(copy_hg)] .= 1
                         h = function_h(copy_hg, doc)
-#                         if (h > h_best) | ((h == h_best) & ((depth > depth_best))) |
-#                            ((h == h_best) & (depth == depth_best) & (count > count_best))
-                            
                         if (h > h_best) | ((h == h_best) & ((depth > depth_best)))
                             global best_output = output
                             global depth_best = depth
@@ -271,14 +355,42 @@ function beta(patterns, doc, atoms)
             global indexes = (1, length(atoms_depths[1]))
         end
         hypergraph[orig_best_index[1]:orig_best_index[2], nhe(hypergraph)] .= 1
+        last_tokens = atoms_tokens[atoms_depths[1]]
         atoms_depths[1][indexes[1]:indexes[2]] .= best_pattern[2]
-        atoms_depths[2][indexes[1]:indexes[2]] .= maximum(atoms_depths[2][indexes[1]:indexes[2]])
+        atoms_depths[2][indexes[1]:indexes[2]] .= 0
+        new_tokens = [j ∉ indexes ? last_tokens[j] : last_tokens[indexes[1]:indexes[2]] for j in 1:length(last_tokens)]
+        deleteat!(new_tokens, indexes[1]+1:indexes[2])
         deleteat!(atoms_depths[1], indexes[1]+1:indexes[2])
         deleteat!(atoms_depths[2], indexes[1]+1:indexes[2])
+        atoms_tokens[atoms_depths[1][:]] = new_tokens
         append!(order, [best_output[3]])
+        if debug
+            # print("Actual hypergraph: ", hypergraph, "\n")
+            # print("Atoms tokens dict is: ", atoms_tokens, "\n")
+            # print("Actual indexes: ", (i, j), "\n")
+            # print("Orig indexes: ", orig_indexes, "\n")
+            # print("Pattern is: ", pattern, "\n")
+            # print("Depth is: ", depth, "\n")
+            # print("Depth best is: ", depth_best, "\n")
+            # print("Atoms depths are: ", atoms_depths[1], "\n")
+        end
         if any(y->y != 1, hypergraph[:, nhe(hypergraph)])
             add_hyperedge!(hypergraph)
         end
     end
-    return (hypergraph, parsing(hypergraph, parsed_text, order))
+    return hypergraph, atoms_tokens
+    # return (hypergraph, parsing(hypergraph, parsed_text, order))
+end
+
+function draw_hg(hypergraph, doc)
+    dict_ = Dict(i => token.text for (i, token) in enumerate(doc))
+    print(dict_)
+    SimpleHypergraphs.draw(
+    hypergraph,
+    HyperNetX; 
+    with_node_labels=true, #whether displaying or not node labels
+    node_labels=dict_,
+    # collapse_nodes=true,
+    # collapse_edges=true
+    )
 end
