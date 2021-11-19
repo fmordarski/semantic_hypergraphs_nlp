@@ -271,9 +271,22 @@ end
 
 function find_paircc(atoms)
     indexes = []
+    taken = []
     for i in 1:length(atoms)-1
-        if (atoms[i] == "C") & (atoms[i+1] == "C")
-            append!(indexes, [[i, i+1]])
+        if !(i in taken)
+            final =  i <= length(atoms)-2
+            if final
+                if (atoms[i] == "C") & (atoms[i+1] == "C") & (atoms[i+2] == "C")
+                    append!(indexes, [[i, i+2]])
+                    append!(taken, [i, i+1, i+2])
+                elseif (atoms[i] == "C") & (atoms[i+1] == "C")
+                    append!(indexes, [[i, i+1]])
+                    append!(taken, [i, i+1])
+                end
+            elseif (atoms[i] == "C") & (atoms[i+1] == "C")
+                append!(indexes, [[i, i+1]])
+                append!(taken, [i, i+1])
+            end
         end
     end
     return indexes
@@ -289,14 +302,14 @@ function initial_atoms(indexes, atoms_depths, atoms_tokens, hypergraph, order)
         last_tokens = atoms_tokens[atoms_depths[1]]
         atoms_depths[1][pair[1]-i:pair[2]-i] .= "B"
         atoms_depths[2][pair[1]-i:pair[2]-i] .= maximum(atoms_depths[2][pair[1]-i:pair[2]-i])
-        deleteat!(atoms_depths[1], pair[1]-i)
-        deleteat!(atoms_depths[2], pair[1]-i)
+        deleteat!(atoms_depths[1], pair[1]-i+1:pair[2]-i)
+        deleteat!(atoms_depths[2], pair[1]-i+1:pair[2]-i)
         new_tokens = [j ∉ pair.-i ? last_tokens[j] : last_tokens[pair.-i] for j in 1:length(last_tokens)]
-        deleteat!(new_tokens, pair[1]-i)
-        atoms_tokens[atoms_depths[1]] = new_tokens
+        deleteat!(new_tokens, pair[1]-i+1:pair[2]-i)
+        atoms_tokens[atoms_depths[1][:]] = new_tokens
         append!(order, [1, 2])
         add_hyperedge!(hypergraph)
-        global i += 1
+        global i += (pair[2]-pair[1])
     end
     return atoms_depths, hypergraph, order, atoms_tokens
 end
@@ -313,10 +326,10 @@ function beta(patterns, doc, atoms, debug=false)
     global hypergraph = Hypergraph{Float64}(length([token for token in doc]), 1)
     global order = []
     global atoms_tokens = Dict([atom for atom in atoms] => tokens)
-    cc_indexes = find_paircc(atoms_depths[1])
-    if length(cc_indexes) > 0
-        atoms_depths, hypergraph, order, atoms_tokens = initial_atoms(cc_indexes, atoms_depths, atoms_tokens, hypergraph, order)
-    end
+    # cc_indexes = find_paircc(atoms_depths[1])
+    # if length(cc_indexes) > 0
+    #     atoms_depths, hypergraph, order, atoms_tokens = initial_atoms(cc_indexes, atoms_depths, atoms_tokens, hypergraph, order)
+    # end
     while any(y->y != 1, hypergraph[:, nhe(hypergraph)])
         global depth_best = 0
         global h_best = 0
