@@ -294,13 +294,11 @@ end
 
 
 function initial_atoms(indexes, atoms_depths, atoms_tokens, hypergraph, order)
-    print(indexes)
     global i = 0
     for pair in indexes
-        print(pair)
         hypergraph[pair[1]:pair[2], nhe(hypergraph)] .= 1
         last_tokens = atoms_tokens[atoms_depths[1]]
-        atoms_depths[1][pair[1]-i:pair[2]-i] .= "B"
+        atoms_depths[1][pair[1]-i:pair[2]-i] .= "C"
         atoms_depths[2][pair[1]-i:pair[2]-i] .= maximum(atoms_depths[2][pair[1]-i:pair[2]-i])
         deleteat!(atoms_depths[1], pair[1]-i+1:pair[2]-i)
         deleteat!(atoms_depths[2], pair[1]-i+1:pair[2]-i)
@@ -326,10 +324,10 @@ function beta(patterns, doc, atoms, debug=false)
     global hypergraph = Hypergraph{Float64}(length([token for token in doc]), 1)
     global order = []
     global atoms_tokens = Dict([atom for atom in atoms] => tokens)
-    # cc_indexes = find_paircc(atoms_depths[1])
-    # if length(cc_indexes) > 0
-    #     atoms_depths, hypergraph, order, atoms_tokens = initial_atoms(cc_indexes, atoms_depths, atoms_tokens, hypergraph, order)
-    # end
+    cc_indexes = find_paircc(atoms_depths[1])
+    if length(cc_indexes) > 0
+        atoms_depths, hypergraph, order, atoms_tokens = initial_atoms(cc_indexes, atoms_depths, atoms_tokens, hypergraph, order)
+    end
     while any(y->y != 1, hypergraph[:, nhe(hypergraph)])
         global depth_best = 0
         global h_best = 0
