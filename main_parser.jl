@@ -1,9 +1,15 @@
-using  SimpleHypergraphs, Statistics
+using  SimpleHypergraphs, Statistics, DataFrames, PyCall
 import LightGraphs
 
 
-function prepare_input(doc)
-    data = Matrix{Union{Missing, String}}(undef, 0, 7)
+spacy = pyimport("spacy")
+
+global nlp = spacy.load("en_core_web_lg")
+
+
+function prepare_input(text)
+    doc = nlp(text)
+    data = Matrix{Union{Missing, String}}(undef, 0, 5)
     for i in 1:length(doc)
         token = doc[i]
         if i != 1
@@ -11,16 +17,46 @@ function prepare_input(doc)
         else
             previous = "None"
         end
-        row = [token.pos_, token.tag_, token.dep_, token.head.pos_,
-               token.head.tag_, token.head.dep_, previous]
-        data = vcat(data, reshape(row, (1, 7)))
+        row = [token.pos_, token.tag_, token.dep_, 
+              token.head.dep_, previous]
+        data = vcat(data, reshape(row, (1, 5)))
     end
     return data
 end
 
-function alpha(doc, model)
-    input = prepare_input(doc)
-    return predict(model, input)
+function one_hot(df, col, uniques)
+    if length(uniques) == 0
+        ux = unique(df[!, col])
+    else
+        ux = uniques
+    end
+    df = transform(df, @. "$col" => ByRow(isequal(ux)) .=> Symbol("$(col)_", ux))
+    if length(uniques) == 0
+        return df, ux
+    else
+        return df
+    end
+end
+
+function convert_df(articles, mapping, model)
+    df = DataFrame(A = Vector{String}(), B = Vector{Vector{String}}())
+    for article in articles
+        temp = DataFrame(prepare_input(article), :auto)
+        rename!(temp, [1 => :pos, 2 => :tag, 3 => :dep, 4 => :head_dep, 5 => :pos_prev])
+        for column in names(temp)
+            temp = one_hot(temp, column, mapping[column])
+        end
+        features = [i for i in range(6, stop=size(temp)[2])]
+        temp = temp[!, features]
+        temp = Matrix(temp)
+        pred = alpha(temp, model)
+        push!(df, [article, pred])
+    end
+    return df
+end
+
+function alpha(data, model)
+    return predict(model, data)
 end
 
 pattern_1 = ("M", "x")
