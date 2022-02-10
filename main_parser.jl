@@ -39,7 +39,7 @@ function one_hot(df, col, uniques)
 end
 
 function convert_df(articles, mapping, model)
-    df = DataFrame(A = Vector{String}(), B = Vector{Vector{String}}())
+    df = DataFrame(Article = Vector{String}(), Atoms = Vector{Vector{String}}())
     for article in articles
         temp = DataFrame(prepare_input(article), :auto)
         rename!(temp, [1 => :pos, 2 => :tag, 3 => :dep, 4 => :head_dep, 5 => :pos_prev])
@@ -50,7 +50,9 @@ function convert_df(articles, mapping, model)
         temp = temp[!, features]
         temp = Matrix(temp)
         pred = alpha(temp, model)
-        push!(df, [article, pred])
+        if !("X" in pred)
+            push!(df, [article, pred])
+        end
     end
     return df
 end
@@ -329,23 +331,24 @@ function find_paircc(atoms)
 end
 
 
-function initial_atoms(indexes, atoms_depths, atoms_tokens, hypergraph, order)
+function initial_atoms(indexes, atoms_depths, atoms_tokens, hypergraph, order, edges)
     global i = 0
-    for pair in indexes
+    for (j, pair) in enumerate(indexes)
         hypergraph[pair[1]:pair[2], nhe(hypergraph)] .= 1
-        last_tokens = atoms_tokens[atoms_depths[1]]
+        last_tokens = atoms_tokens[j-1][2]
         atoms_depths[1][pair[1]-i:pair[2]-i] .= "C"
         atoms_depths[2][pair[1]-i:pair[2]-i] .= maximum(atoms_depths[2][pair[1]-i:pair[2]-i])
         deleteat!(atoms_depths[1], pair[1]-i+1:pair[2]-i)
         deleteat!(atoms_depths[2], pair[1]-i+1:pair[2]-i)
         new_tokens = [j ∉ pair.-i ? last_tokens[j] : last_tokens[pair.-i] for j in 1:length(last_tokens)]
         deleteat!(new_tokens, pair[1]-i+1:pair[2]-i)
-        atoms_tokens[atoms_depths[1][:]] = new_tokens
+        atoms_tokens[j] = (atoms_depths[1][:], new_tokens)
         append!(order, [1, 2])
+        append!(edges, ["C"])
         add_hyperedge!(hypergraph)
         global i += (pair[2]-pair[1])
     end
-    return atoms_depths, hypergraph, order, atoms_tokens
+    return atoms_depths, hypergraph, order, atoms_tokens, edges
 end
 
 
@@ -359,10 +362,12 @@ function beta(patterns, doc, atoms, debug=false)
     global parsed_text = [(atom, token.text) for (token, atom) in zip(doc, atoms)]
     global hypergraph = Hypergraph{Float64}(length([token for token in doc]), 1)
     global order = []
-    global atoms_tokens = Dict([atom for atom in atoms] => tokens)
+    global atoms_tokens = Dict(0 => ([atom for atom in atoms], tokens))
+    # global atoms_tokens = Dict()
+    global edges = []
     cc_indexes = find_paircc(atoms_depths[1])
     if length(cc_indexes) > 0
-        atoms_depths, hypergraph, order, atoms_tokens = initial_atoms(cc_indexes, atoms_depths, atoms_tokens, hypergraph, order)
+        atoms_depths, hypergraph, order, atoms_tokens, edges = initial_atoms(cc_indexes, atoms_depths, atoms_tokens, hypergraph, order, edges)
     end
     while any(y->y != 1, hypergraph[:, nhe(hypergraph)])
         global depth_best = 0
@@ -402,15 +407,16 @@ function beta(patterns, doc, atoms, debug=false)
             global indexes = (1, length(atoms_depths[1]))
         end
         hypergraph[orig_best_index[1]:orig_best_index[2], nhe(hypergraph)] .= 1
-        last_tokens = atoms_tokens[atoms_depths[1]]
+        last_tokens = atoms_tokens[nhe(hypergraph)-1][2]
         atoms_depths[1][indexes[1]:indexes[2]] .= best_pattern[2]
         atoms_depths[2][indexes[1]:indexes[2]] .= 0
         new_tokens = [j ∉ indexes ? last_tokens[j] : last_tokens[indexes[1]:indexes[2]] for j in 1:length(last_tokens)]
         deleteat!(new_tokens, indexes[1]+1:indexes[2])
         deleteat!(atoms_depths[1], indexes[1]+1:indexes[2])
         deleteat!(atoms_depths[2], indexes[1]+1:indexes[2])
-        atoms_tokens[atoms_depths[1][:]] = new_tokens
+        atoms_tokens[nhe(hypergraph)] = (atoms_depths[1][:], new_tokens) 
         append!(order, [best_output[3]])
+        append!(edges, best_output[2])
         if debug
             # print("Actual hypergraph: ", hypergraph, "\n")
             # print("Atoms tokens dict is: ", atoms_tokens, "\n")
@@ -425,7 +431,7 @@ function beta(patterns, doc, atoms, debug=false)
             add_hyperedge!(hypergraph)
         end
     end
-    return hypergraph, atoms_tokens
+    return hypergraph, atoms_tokens, edges
     # return (hypergraph, parsing(hypergraph, parsed_text, order))
 end
 
