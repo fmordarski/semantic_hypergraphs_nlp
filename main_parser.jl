@@ -1,10 +1,10 @@
-using  SimpleHypergraphs, Statistics, DataFrames, PyCall
+using  SimpleHypergraphs, Statistics, DataFrames, PyCall, Random
 import LightGraphs
 
-
+Random.seed!(1)
 spacy = pyimport("spacy")
 
-global nlp = spacy.load("en_core_web_lg")
+global nlp = spacy.load("en_core_web_trf")
 
 
 function prepare_input(text)
@@ -50,7 +50,7 @@ function convert_df(articles, mapping, model)
         temp = temp[!, features]
         temp = Matrix(temp)
         pred = alpha(temp, model)
-        if !("X" in pred)
+        if (!("X" in pred)) & (!occursin(",", article))
             push!(df, [article, pred])
         end
     end
@@ -387,6 +387,16 @@ function beta(patterns, doc, atoms, debug=false)
                         copy_hg = get_copy_hg(hypergraph)
                         copy_hg[orig_indexes[1]:orig_indexes[2], nhe(copy_hg)] .= 1
                         h = function_h(copy_hg, doc)
+                        if debug
+                            print("Actual hypergraph: ", hypergraph, "\n")
+                            print("Atoms tokens dict is: ", atoms_tokens, "\n")
+                            print("Actual indexes: ", (i, j), "\n")
+                            print("Orig indexes: ", orig_indexes, "\n")
+                            print("Pattern is: ", output, "\n")
+                            print("Depth is: ", depth, "\n")
+                            print("Atoms depths are: ", atoms_depths[1], "\n")
+                            print("Score h is: ", h, "\na")
+                        end
                         if (h > h_best) | ((h == h_best) & ((depth > depth_best)))
                             global best_output = output
                             global depth_best = depth
@@ -406,6 +416,9 @@ function beta(patterns, doc, atoms, debug=false)
             global orig_best_index = (1, nhv(hypergraph))
             global indexes = (1, length(atoms_depths[1]))
         end
+        if debug
+            println("\n\n\n\n\n", "NEXT EDGE", "\n\n\n\n\n")
+        end
         hypergraph[orig_best_index[1]:orig_best_index[2], nhe(hypergraph)] .= 1
         last_tokens = atoms_tokens[nhe(hypergraph)-1][2]
         atoms_depths[1][indexes[1]:indexes[2]] .= best_pattern[2]
@@ -417,16 +430,6 @@ function beta(patterns, doc, atoms, debug=false)
         atoms_tokens[nhe(hypergraph)] = (atoms_depths[1][:], new_tokens) 
         append!(order, [best_output[3]])
         append!(edges, best_output[2])
-        if debug
-            # print("Actual hypergraph: ", hypergraph, "\n")
-            # print("Atoms tokens dict is: ", atoms_tokens, "\n")
-            # print("Actual indexes: ", (i, j), "\n")
-            # print("Orig indexes: ", orig_indexes, "\n")
-            # print("Pattern is: ", pattern, "\n")
-            # print("Depth is: ", depth, "\n")
-            # print("Depth best is: ", depth_best, "\n")
-            # print("Atoms depths are: ", atoms_depths[1], "\n")
-        end
         if any(y->y != 1, hypergraph[:, nhe(hypergraph)])
             add_hyperedge!(hypergraph)
         end
